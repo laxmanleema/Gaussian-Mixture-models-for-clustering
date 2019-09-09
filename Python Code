@@ -1,0 +1,129 @@
+
+"""
+import numpy as np
+from sklearn.cluster import KMeans
+import math
+import pandas as pd
+
+data=pd.read_excel(r'C:/Users/Dell/Desktop/IRIS_GMM/IRIS.xlsx')
+data=data.drop("Class",axis=1)
+n_cluster=3
+data=data.loc[0:9,:]
+
+# Initial values 
+def initialize_clusters(data, n_clusters):
+    clusters = []
+    
+    kmeans = KMeans(n_clusters).fit(data)
+    mu_k = kmeans.cluster_centers_
+   
+    for i in range(n_clusters):
+        clusters.append({
+        'pi_k': 1.0 / n_clusters,
+        'mu_k': mu_k[i],
+        'cov_k': np.identity(data.shape[1])
+          })
+    return clusters 
+
+#Define Parameters
+    
+#Define X_kk
+def X_kk(i,j,n_clusters):    
+    # defining X_kk
+    X_kk = np.zeros((n_clusters,n_clusters))
+    X_kk[i-1,j-1]=1
+    return X_kk
+
+#Normal didtribution pdf
+def Gaussian(x,mu,cov):
+    G_pdf=np.exp((-0.5*(x-mu).T)@np.linalg.inv(cov)@(x-mu))/(np.sqrt(((2*np.pi)**len(mu))*np.linalg.det(cov)))
+    return G_pdf
+
+#Define H matrix
+def H_matrix(clusters,x,gamma):
+    H_matrix=np.ones((len(clusters),len(clusters)))
+    H_matrix=gamma*H_matrix
+    for i in range(len(clusters)):
+        G_normal_k=Gaussian(x,clusters[i]['mu_k'],clusters[i]['cov_k'])
+        H_matrix[i,i]=-math.log(clusters[i]['pi_k']*G_normal_k)
+    return H_matrix
+
+#def expectation step(phi_responsibility): 
+def Expect(x,gamma,k,clusters):
+    n_clusters=len(clusters)
+    B=np.exp(-H_matrix(clusters,x,gamma))
+    A=X_kk(k,k,n_clusters)@B   
+    Phi = np.trace(A)/np.trace(B)
+    return Phi
+
+#Maximisation Step(Updating the values)
+def maximization_step(data,clusters,gamma):
+    clusters_update=[]
+    for i in range(len(clusters)):
+        Phi_nk=[]        #esponsibility of each data point for each cluster
+        mu_nk=np.zeros((data.shape[0],data.shape[1]))
+        for j in range(data.shape[0]):
+            x=data.loc[j,:].to_numpy() #dataframe to array
+            Phi=Expect(x,gamma,i,clusters)
+            mu = Phi*x
+            Phi_nk.append(Phi) #updating phi_nk
+            mu_nk[j,:]=mu
+        Phi_Sum=np.sum(Phi_nk)
+        mu_sum=np.sum(mu_nk,axis=0)
+        Pi_k=(1/data.shape[0])*Phi_Sum #updtaed Pi_k
+        mu_k=mu_sum/Phi_Sum            #updated mu_k
+    
+        Cov_nk=np.zeros((data.shape[1],data.shape[1]))
+        for j in range(data.shape[0]):
+            x=data.loc[j,:].to_numpy()
+            x=np.asmatrix(x)
+            diff=(x-mu_k).T.dot(x-mu_k)
+            Cov_nk+=Phi_nk[j]*diff
+        Cov_k=Cov_nk/Phi_Sum
+        clusters_update.append({'pi_k':Pi_k,'mu_k':mu_k,'cov_k':Cov_k})
+    return clusters_update
+        
+#   return clusters_update
+#        for cluster in clusters:
+#            cluster['pi_k']=Pi_k
+#            cluster['mu_k']=mu_k
+#            cluster['Cov_k']= Cov_k
+#            return clusters
+#       return clusters_update
+
+ #Updating in Clusters
+#def update():
+#     for cluster in clusters:
+#        cluster['pi_k']=Pi_k
+#        cluster['mu_k']=mu_k
+#        cluster['Cov_k']= Cov_k
+#        return clusters
+     
+#Likelihood Function
+#def likelihood(data,clusters,gamma):
+#  likelihood_nk=[]
+#  for j in range(data.shape[0]):
+#        x=data.loc[j+1,:].to_numpy()
+#        C=np.exp(-F)
+#        B=np.exp(-H_matrix(clusters,x,gamma))
+#        likelihood=B/C
+#  likelihood_nk.append(likelihood)
+   
+ 
+
+def iteration(data,n_clusters,gamma,itr):
+    clusters =initialize_clusters(data, n_clusters)
+    clusters_group={}
+    clusters_group.update({"1":clusters})
+    for t in range(itr):
+       new_cluster= maximization_step(data,clusters,gamma)
+       clusters_group.update({str(t+2):new_cluster})
+       clusters= new_cluster
+    return clusters_group
+        
+       
+    
+
+   
+
+    
